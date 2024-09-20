@@ -25,17 +25,24 @@ def get_mail_domains():
 
 def create_mail_tm_account():
     fake = Faker()
-    mail_domains = get_mail_domains()
-    if mail_domains:
-        domain = random.choice(mail_domains)['domain']
-        username = generate_random_string(10)
-        password = fake.password()
-        birthday = fake.date_of_birth(minimum_age=18, maximum_age=45)
-        first_name = fake.first_name()
-        last_name = fake.last_name()
-        url = "https://api.mail.tm/accounts"
-        headers = {"Content-Type": "application/json"}
-        data = {"address": f"{username}@{domain}", "password": password}
+    mail_domains = None
+    while mail_domains is None:  # Retry until successful
+        mail_domains = get_mail_domains()
+        if mail_domains is None:
+            print("[×] Retrying to get mail domains...")
+            time.sleep(5)  # Wait for 5 seconds before retrying
+    
+    domain = random.choice(mail_domains)['domain']
+    username = generate_random_string(10)
+    password = fake.password()
+    birthday = fake.date_of_birth(minimum_age=18, maximum_age=45)
+    first_name = fake.first_name()
+    last_name = fake.last_name()
+    url = "https://api.mail.tm/accounts"
+    headers = {"Content-Type": "application/json"}
+    data = {"address": f"{username}@{domain}", "password": password}
+    
+    while True:  # Keep retrying until an account is created
         try:
             response = requests.post(url, headers=headers, json=data)
             if response.status_code == 201:
@@ -43,10 +50,10 @@ def create_mail_tm_account():
                 return f"{username}@{domain}", password, first_name, last_name, birthday
             else:
                 print(f'[×] Email Error : {response.text}')
-                return None, None, None, None, None
         except Exception as e:
             print(f'[×] Error : {e}')
-            return None, None, None, None, None
+        print("[×] Retrying mail account creation...")
+        time.sleep(5)  # Wait before retrying
 
 def _call(url, params, post=True):
     headers = {
@@ -109,13 +116,21 @@ def register_facebook_account(email, password, first_name, last_name, birthday):
         ﴾𝐕𝐈𝐏﴿ Token : {token}
         ⋘▬▭▬▭▬▭▬﴾𓆩OK𓆪﴿▬▭▬▭▬▭▬⋙
         ''')
+        return True
     else:
         print(f'[×] Registration failed. Response: {reg}')
+        return False
 
 # Main script execution
 if __name__ == '__main__':
-    for i in range(int(input('[+] How Many Accounts You Want: '))):
+    num_accounts = int(input('[+] How Many Accounts You Want: '))
+    successful_accounts = 0
+
+    while successful_accounts < num_accounts:
         email, password, first_name, last_name, birthday = create_mail_tm_account()
         if email and password and first_name and last_name and birthday:
-            register_facebook_account(email, password, first_name, last_name, birthday)
+            success = register_facebook_account(email, password, first_name, last_name, birthday)
+            if success:
+                successful_accounts += 1
+                print(f'[+] Successfully created {successful_accounts}/{num_accounts} accounts.')
             time.sleep(60)  # wait for 1 minute between account creation attempts
