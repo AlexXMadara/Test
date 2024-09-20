@@ -4,6 +4,7 @@ import string
 import json
 import hashlib
 from faker import Faker
+import time
 
 def generate_random_string(length):
     letters_and_digits = string.ascii_letters + string.digits
@@ -38,6 +39,7 @@ def create_mail_tm_account():
         try:
             response = requests.post(url, headers=headers, json=data)
             if response.status_code == 201:
+                print(f'[+] Mail account created: {username}@{domain}')
                 return f"{username}@{domain}", password, first_name, last_name, birthday
             else:
                 print(f'[×] Email Error : {response.text}')
@@ -55,7 +57,6 @@ def _call(url, params, post=True):
     else:
         response = requests.get(url, params=params, headers=headers)
     
-    # Make sure the response is returned as a JSON object
     try:
         return response.json()
     except json.JSONDecodeError as e:
@@ -93,7 +94,6 @@ def register_facebook_account(email, password, first_name, last_name, birthday):
     api_url = 'https://b-api.facebook.com/method/user.register'
     reg = _call(api_url, req)
 
-    # Check for successful registration
     if 'new_user_id' in reg and 'session_info' in reg:
         id = reg['new_user_id']
         token = reg['session_info']['access_token']
@@ -118,3 +118,4 @@ if __name__ == '__main__':
         email, password, first_name, last_name, birthday = create_mail_tm_account()
         if email and password and first_name and last_name and birthday:
             register_facebook_account(email, password, first_name, last_name, birthday)
+            time.sleep(60)  # wait for 1 minute between account creation attempts
