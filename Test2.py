@@ -13,9 +13,9 @@ def generate_random_string(length):
     letters_and_digits = string.ascii_letters + string.digits
     return ''.join(random.choice(letters_and_digits) for i in range(length))
 
-# Function to use the ZylaLabs Temp Email API and generate a temporary email
+# Function to generate temporary email using ZylaLabs Temp Email API
 def get_temp_mail():
-    url = "https://zylalabs.com/api/5076/temp+email+service+api/50/new+email"
+    url = "https://zylalabs.com/api/5076/temp+email+service+api/6455/generate+temp+email"
     headers = {
         "Authorization": f"Bearer {API_ACCESS_KEY}",
         "Content-Type": "application/json"
@@ -26,16 +26,37 @@ def get_temp_mail():
         if response.status_code == 200:
             email_info = response.json()
             email_address = email_info['email']
+            token = email_info['token']
             print(f"[+] Temporary email generated: {email_address}")
-            return email_address
+            return email_address, token
         else:
             print(f"[×] Error fetching temp mail: {response.status_code} - {response.text}")
+            return None, None
+    except Exception as e:
+        print(f"[×] Error: {e}")
+        return None, None
+
+# Function to verify the inbox for new emails using ZylaLabs Temp Email API
+def verify_inbox(email, token):
+    url = f"https://zylalabs.com/api/5076/temp+email+service+api/6453/verify+inbox?email={email}&token={token}"
+    headers = {
+        "Authorization": f"Bearer {API_ACCESS_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    try:
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            print(f"[+] Inbox verified for {email}")
+            return response.json()
+        else:
+            print(f"[×] Error verifying inbox: {response.status_code} - {response.text}")
             return None
     except Exception as e:
         print(f"[×] Error: {e}")
         return None
 
-# API call function with proxy support
+# API call function for Facebook registration
 def _call(url, params, proxy=None, post=True):
     headers = {
         'User-Agent': '[FBAN/FB4A;FBAV/35.0.0.48.273;FBDM/{density=1.33125,width=800,height=1205};FBLC/en_US;FBCR/;FBPN/com.facebook.katana;FBDV/Nexus 7;FBSV/4.1.1;FBBK/0;]'
@@ -117,9 +138,9 @@ if __name__ == '__main__':
     fake = Faker()
 
     while successful_accounts < num_accounts:
-        # Fetch temp mail from ZylaLabs Temp Email API
-        email = get_temp_mail()
-        if email:
+        # Fetch temp mail and token from ZylaLabs Temp Email API
+        email, token = get_temp_mail()
+        if email and token:
             # Generate random user details
             password = fake.password()
             first_name = fake.first_name()
@@ -131,5 +152,10 @@ if __name__ == '__main__':
             if success:
                 successful_accounts += 1
                 print(f'[+] Successfully created {successful_accounts}/{num_accounts} accounts.')
+            
+            # Verify the inbox for confirmation emails
+            inbox_data = verify_inbox(email, token)
+            if inbox_data:
+                print(f"[+] Inbox data for {email}: {inbox_data}")
             
             time.sleep(120)  # wait for 2 minutes between account creation attempts
