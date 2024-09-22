@@ -1,55 +1,67 @@
 import requests
 import random
 import string
-import json
 import hashlib
-from faker import Faker
 import time
+from faker import Faker
+
+# Your ZylaLabs Temp Email Service API Key
+API_ACCESS_KEY = "5375|xYI3xBIADR1BW03ndXAQnrFDqcd0MIRgavIIVYXh"
 
 # Function to generate random strings
 def generate_random_string(length):
     letters_and_digits = string.ascii_letters + string.digits
     return ''.join(random.choice(letters_and_digits) for i in range(length))
 
-# Use mail.tm to get temporary email addresses
-def create_mail_tm_account():
-    fake = Faker()
+# Function to generate temporary email using ZylaLabs Temp Email API with retry logic
+def get_temp_mail(retries=5, wait_time=10):
+    url = "https://zylalabs.com/api/5076/temp+email+service+api/6455/generate+temp+email"
+    headers = {
+        "Authorization": f"Bearer {API_ACCESS_KEY}",
+        "Content-Type": "application/json"
+    }
     
-    # Step 1: Get a valid domain from mail.tm
-    domain_url = "https://api.mail.tm/domains"
-    headers = {"accept": "application/json"}
+    for attempt in range(retries):
+        try:
+            response = requests.get(url, headers=headers)
+            if response.status_code == 200:
+                email_info = response.json()
+                email_address = email_info['email']
+                token = email_info['token']
+                print(f"[+] Temporary email generated: {email_address}")
+                return email_address, token
+            elif response.status_code == 503:
+                print(f"[×] Service unavailable, retrying in {wait_time} seconds... (Attempt {attempt + 1}/{retries})")
+                time.sleep(wait_time)  # Wait before retrying
+            else:
+                print(f"[×] Error fetching temp mail: {response.status_code} - {response.text}")
+                return None, None
+        except Exception as e:
+            print(f"[×] Error: {e}")
+    
+    print("[×] Max retries reached. Failed to fetch temp mail.")
+    return None, None
+
+# Function to verify the inbox for new emails using ZylaLabs Temp Email API
+def verify_inbox(email, token):
+    url = f"https://zylalabs.com/api/5076/temp+email+service+api/6453/verify+inbox?email={email}&token={token}"
+    headers = {
+        "Authorization": f"Bearer {API_ACCESS_KEY}",
+        "Content-Type": "application/json"
+    }
     
     try:
-        domain_response = requests.get(domain_url, headers=headers)
-        if domain_response.status_code == 200:
-            domain_info = domain_response.json()
-            domain = domain_info[0]['domain']  # Choose the first available domain
-            
-            # Step 2: Create an email account using mail.tm
-            username = generate_random_string(10)
-            email = f"{username}@{domain}"
-            password = fake.password()
-            account_url = "https://api.mail.tm/accounts"
-            data = {"address": email, "password": password}
-            account_response = requests.post(account_url, headers=headers, json=data)
-            
-            if account_response.status_code == 201:  # Account successfully created
-                birthday = fake.date_of_birth(minimum_age=18, maximum_age=45)
-                first_name = fake.first_name()
-                last_name = fake.last_name()
-                print(f'[+] Mail account created: {email}')
-                return email, password, first_name, last_name, birthday
-            else:
-                print(f'[×] Error creating email account: {account_response.text}')
-                return None, None, None, None, None
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            print(f"[+] Inbox verified for {email}")
+            return response.json()
         else:
-            print(f'[×] Error getting domain: {domain_response.status_code} - {domain_response.text}')
-            return None, None, None, None, None
+            print(f"[×] Error verifying inbox: {response.status_code} - {response.text}")
+            return None
     except Exception as e:
-        print(f'[×] Error: {e}')
-        return None, None, None, None, None
+        print(f"[×] Error: {e}")
 
-# API call function with proxy support
+# API call function for Facebook registration
 def _call(url, params, proxy=None, post=True):
     headers = {
         'User-Agent': '[FBAN/FB4A;FBAV/35.0.0.48.273;FBDM/{density=1.33125,width=800,height=1205};FBLC/en_US;FBCR/;FBPN/com.facebook.katana;FBDV/Nexus 7;FBSV/4.1.1;FBBK/0;]'
@@ -99,8 +111,8 @@ def register_facebook_account(email, password, first_name, last_name, birthday, 
 
     # Check for Facebook rate limit error
     if 'error_code' in reg and reg['error_code'] == 368:
-        print(f"[×] Rate limit detected. Pausing for 6 hours...")
-        time.sleep(6 * 60 * 60)  # Pause for 6 hours
+        print(f"[×] Rate limit detected. Pausing for 11 seconds...")
+        time.sleep(11)  # Pause for 11 seconds
         return False
     
     if 'new_user_id' in reg and 'session_info' in reg:
@@ -128,11 +140,27 @@ if __name__ == '__main__':
     num_accounts = int(input('[+] How Many Accounts You Want: '))
     successful_accounts = 0
 
+    fake = Faker()
+
     while successful_accounts < num_accounts:
-        email, password, first_name, last_name, birthday = create_mail_tm_account()
-        if email and password and first_name and last_name and birthday:
+        # Fetch temp mail and token from ZylaLabs Temp Email API
+        email, token = get_temp_mail()
+        if email and token:
+            # Generate random user details
+            password = fake.password()
+            first_name = fake.first_name()
+            last_name = fake.last_name()
+            birthday = fake.date_of_birth(minimum_age=18, maximum_age=45)
+
+            # Attempt to register a Facebook account
             success = register_facebook_account(email, password, first_name, last_name, birthday)
             if success:
                 successful_accounts += 1
                 print(f'[+] Successfully created {successful_accounts}/{num_accounts} accounts.')
+            
+            # Verify the inbox for confirmation emails
+            inbox_data = verify_inbox(email, token)
+            if inbox_data:
+                print(f"[+] Inbox data for {email}: {inbox_data}")
+            
             time.sleep(120)  # wait for 2 minutes between account creation attempts
