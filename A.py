@@ -1,62 +1,48 @@
-import requests
+import time
 import random
 import string
-import json
 import hashlib
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 from faker import Faker
-import time
 
 # Function to generate random strings
 def generate_random_string(length):
     letters_and_digits = string.ascii_letters + string.digits
     return ''.join(random.choice(letters_and_digits) for i in range(length))
 
-# Use temp-mailfree.com to get a temporary email
-def create_temp_mailfree_account():
-    fake = Faker()
+# Function to scrape temporary email from temp-mail.gg
+def get_temp_mail():
+    # Set up Selenium and ChromeDriver
+    options = webdriver.ChromeOptions()
+    options.add_argument('--headless')  # Run in headless mode
+    options.add_argument('--disable-gpu')  # Disable GPU for headless performance
+    options.add_argument('--no-sandbox')
     
-    url = "https://api.temp-mailfree.com/request/mail/id"  # Endpoint to generate an email
-    headers = {
-        "Content-Type": "application/json"
-    }
-    
-    try:
-        response = requests.get(url, headers=headers)
-        if response.status_code == 200:
-            email_info = response.json()
-            email = email_info['email']
-            password = fake.password()
-            birthday = fake.date_of_birth(minimum_age=18, maximum_age=45)
-            first_name = fake.first_name()
-            last_name = fake.last_name()
-            print(f'[+] Mail account created: {email}')
-            return email, password, first_name, last_name, birthday
-        else:
-            print(f'[×] Error creating email: {response.text}')
-            return None, None, None, None, None
-    except Exception as e:
-        print(f'[×] Error: {e}')
-        return None, None, None, None, None
-
-# Check incoming mail after account creation
-def check_incoming_mail(email):
-    url = f"https://api.temp-mailfree.com/request/mail/{email}/"
-    headers = {
-        "Content-Type": "application/json"
-    }
+    # Create a new instance of ChromeDriver
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
     
     try:
-        response = requests.get(url, headers=headers)
-        if response.status_code == 200:
-            mails = response.json()
-            if mails:
-                print(f"[+] Incoming mail for {email}: {mails}")
-            else:
-                print(f"[×] No new mail for {email}")
-        else:
-            print(f"[×] Error checking mail: {response.status_code} - {response.text}")
+        # Visit the temp-mail.gg mailbox page
+        driver.get("https://temp-mail.gg/mailbox")
+        
+        # Wait for the email address to be generated and displayed
+        time.sleep(5)  # Adjust the sleep time if needed for page load
+        
+        # Locate the generated email address
+        email_element = driver.find_element(By.XPATH, '//*[@id="email"]')
+        email_address = email_element.get_attribute('value')
+        
+        print(f"[+] Temporary email generated: {email_address}")
+        return email_address
     except Exception as e:
-        print(f"[×] Error: {e}")
+        print(f"[×] Error while fetching temp mail: {e}")
+        return None
+    finally:
+        # Close the browser
+        driver.quit()
 
 # API call function with proxy support
 def _call(url, params, proxy=None, post=True):
@@ -109,7 +95,7 @@ def register_facebook_account(email, password, first_name, last_name, birthday, 
     # Check for Facebook rate limit error
     if 'error_code' in reg and reg['error_code'] == 368:
         print(f"[×] Rate limit detected. Pausing for 11 seconds...")
-        time.sleep(11)  # Pause for 11 seconds instead of 6 hours
+        time.sleep(11)  # Pause for 11 seconds
         return False
     
     if 'new_user_id' in reg and 'session_info' in reg:
@@ -137,15 +123,22 @@ if __name__ == '__main__':
     num_accounts = int(input('[+] How Many Accounts You Want: '))
     successful_accounts = 0
 
+    fake = Faker()
+
     while successful_accounts < num_accounts:
-        email, password, first_name, last_name, birthday = create_temp_mailfree_account()
-        if email and password and first_name and last_name and birthday:
+        # Fetch temp mail from temp-mail.gg
+        email = get_temp_mail()
+        if email:
+            # Generate random user details
+            password = fake.password()
+            first_name = fake.first_name()
+            last_name = fake.last_name()
+            birthday = fake.date_of_birth(minimum_age=18, maximum_age=45)
+
+            # Attempt to register a Facebook account
             success = register_facebook_account(email, password, first_name, last_name, birthday)
             if success:
                 successful_accounts += 1
                 print(f'[+] Successfully created {successful_accounts}/{num_accounts} accounts.')
-            
-            # Check for incoming mail after account creation
-            check_incoming_mail(email)
             
             time.sleep(120)  # wait for 2 minutes between account creation attempts
