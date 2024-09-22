@@ -6,54 +6,64 @@ import hashlib
 from faker import Faker
 import time
 
-# Fetch free proxies from a public proxy API
-def get_proxies():
-    url = "https://www.proxy-list.download/api/v1/get?type=https"
-    try:
-        response = requests.get(url)
-        if response.status_code == 200:
-            proxies = response.text.splitlines()
-            return proxies
-        else:
-            print(f'[×] Failed to fetch proxies: {response.status_code}')
-            return []
-    except Exception as e:
-        print(f'[×] Error fetching proxies: {e}')
-        return []
-
-# Select a random proxy from the list
-def get_random_proxy(proxies):
-    if proxies:
-        return random.choice(proxies)
-    return None
-
 # Function to generate random strings
 def generate_random_string(length):
     letters_and_digits = string.ascii_letters + string.digits
     return ''.join(random.choice(letters_and_digits) for i in range(length))
 
-# Use temp-mail.gg to get temporary email addresses
-def create_temp_mail_gg_account():
+# Use mail.tm to get temporary email addresses
+def create_mail_tm_account():
     fake = Faker()
-    url = "https://api.temp-mail.gg/mailbox"
+    
+    # Step 1: Get a valid domain from mail.tm
+    domain_url = "https://api.mail.tm/domains"
     headers = {"accept": "application/json"}
+    
     try:
-        response = requests.get(url, headers=headers)
-        if response.status_code == 200:
-            mailbox_info = response.json()
-            email = mailbox_info['email']
+        domain_response = requests.get(domain_url, headers=headers)
+        if domain_response.status_code == 200:
+            domain_info = domain_response.json()
+            domain = domain_info[0]['domain']  # Choose the first available domain
+            
+            # Step 2: Create an email account using mail.tm
+            username = generate_random_string(10)
+            email = f"{username}@{domain}"
             password = fake.password()
-            birthday = fake.date_of_birth(minimum_age=18, maximum_age=45)
-            first_name = fake.first_name()
-            last_name = fake.last_name()
-            print(f'[+] Mail account created: {email}')
-            return email, password, first_name, last_name, birthday
+            account_url = "https://api.mail.tm/accounts"
+            data = {"address": email, "password": password}
+            account_response = requests.post(account_url, headers=headers, json=data)
+            
+            if account_response.status_code == 201:  # Account successfully created
+                birthday = fake.date_of_birth(minimum_age=18, maximum_age=45)
+                first_name = fake.first_name()
+                last_name = fake.last_name()
+                print(f'[+] Mail account created: {email}')
+                return email, password, first_name, last_name, birthday
+            else:
+                print(f'[×] Error creating email account: {account_response.text}')
+                return None, None, None, None, None
         else:
-            print(f'[×] Email Error : {response.text}')
+            print(f'[×] Error getting domain: {domain_response.status_code} - {domain_response.text}')
             return None, None, None, None, None
     except Exception as e:
-        print(f'[×] Error : {e}')
+        print(f'[×] Error: {e}')
         return None, None, None, None, None
+
+# Webhook integration with Easy Fast Temp Mail API
+def send_webhook():
+    url = "https://easy-fast-temp-mail.p.rapidapi.com/myaddress@my24h.email/webhook"
+    payload = {"webhook": "https://www.webhook.site/incoming-mail"}
+    headers = {
+        "x-rapidapi-key": "Sign Up for Key",  # Replace with your RapidAPI key
+        "x-rapidapi-host": "easy-fast-temp-mail.p.rapidapi.com",
+        "Content-Type": "application/json"
+    }
+    
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        print(f'[+] Webhook Response: {response.json()}')
+    except Exception as e:
+        print(f'[×] Webhook Error: {e}')
 
 # API call function with proxy support
 def _call(url, params, proxy=None, post=True):
@@ -105,8 +115,8 @@ def register_facebook_account(email, password, first_name, last_name, birthday, 
 
     # Check for Facebook rate limit error
     if 'error_code' in reg and reg['error_code'] == 368:
-        print(f"[×] Rate limit detected. Pausing for 6 hours...")
-        time.sleep(6 * 60 * 60)  # Pause for 6 hours
+        print(f"[×] Rate limit detected. Pausing for 11 seconds...")
+        time.sleep(11)  # Pause for 11 seconds instead of 6 hours
         return False
     
     if 'new_user_id' in reg and 'session_info' in reg:
@@ -133,20 +143,16 @@ def register_facebook_account(email, password, first_name, last_name, birthday, 
 if __name__ == '__main__':
     num_accounts = int(input('[+] How Many Accounts You Want: '))
     successful_accounts = 0
-    proxies = get_proxies()  # Fetch proxies
 
     while successful_accounts < num_accounts:
-        email, password, first_name, last_name, birthday = create_temp_mail_gg_account()
+        email, password, first_name, last_name, birthday = create_mail_tm_account()
         if email and password and first_name and last_name and birthday:
-            proxy = get_random_proxy(proxies)
-            proxy_dict = {
-                'http': f'http://{proxy}',
-                'https': f'https://{proxy}'
-            } if proxy else None
-            print(f'[+] Using proxy: {proxy}')
-            
-            success = register_facebook_account(email, password, first_name, last_name, birthday, proxy=proxy_dict)
+            success = register_facebook_account(email, password, first_name, last_name, birthday)
             if success:
                 successful_accounts += 1
                 print(f'[+] Successfully created {successful_accounts}/{num_accounts} accounts.')
+            
+            # Send webhook after each successful account creation
+            send_webhook()
+            
             time.sleep(120)  # wait for 2 minutes between account creation attempts
