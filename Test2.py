@@ -1,59 +1,39 @@
 import requests
 import random
 import string
-import json
 import hashlib
-from faker import Faker
 import time
+from faker import Faker
 
-# Fetch free proxies from a public proxy API
-def get_proxies():
-    url = "https://www.proxy-list.download/api/v1/get?type=https"
-    try:
-        response = requests.get(url)
-        if response.status_code == 200:
-            proxies = response.text.splitlines()
-            return proxies
-        else:
-            print(f'[×] Failed to fetch proxies: {response.status_code}')
-            return []
-    except Exception as e:
-        print(f'[×] Error fetching proxies: {e}')
-        return []
-
-# Select a random proxy from the list
-def get_random_proxy(proxies):
-    if proxies:
-        return random.choice(proxies)
-    return None
+# Your ZylaLabs Temp Email Service API Key
+API_ACCESS_KEY = "5375|xYI3xBIADR1BW03ndXAQnrFDqcd0MIRgavIIVYXh"
 
 # Function to generate random strings
 def generate_random_string(length):
     letters_and_digits = string.ascii_letters + string.digits
     return ''.join(random.choice(letters_and_digits) for i in range(length))
 
-# Use temp-mail.gg to get temporary email addresses
-def create_temp_mail_gg_account():
-    fake = Faker()
-    url = "https://api.temp-mail.gg/mailbox"
-    headers = {"accept": "application/json"}
+# Function to use the ZylaLabs Temp Email API and generate a temporary email
+def get_temp_mail():
+    url = "https://zylalabs.com/api/5076/temp+email+service+api/50/new+email"
+    headers = {
+        "Authorization": f"Bearer {API_ACCESS_KEY}",
+        "Content-Type": "application/json"
+    }
+    
     try:
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
-            mailbox_info = response.json()
-            email = mailbox_info['email']
-            password = fake.password()
-            birthday = fake.date_of_birth(minimum_age=18, maximum_age=45)
-            first_name = fake.first_name()
-            last_name = fake.last_name()
-            print(f'[+] Mail account created: {email}')
-            return email, password, first_name, last_name, birthday
+            email_info = response.json()
+            email_address = email_info['email']
+            print(f"[+] Temporary email generated: {email_address}")
+            return email_address
         else:
-            print(f'[×] Email Error : {response.text}')
-            return None, None, None, None, None
+            print(f"[×] Error fetching temp mail: {response.status_code} - {response.text}")
+            return None
     except Exception as e:
-        print(f'[×] Error : {e}')
-        return None, None, None, None, None
+        print(f"[×] Error: {e}")
+        return None
 
 # API call function with proxy support
 def _call(url, params, proxy=None, post=True):
@@ -105,8 +85,8 @@ def register_facebook_account(email, password, first_name, last_name, birthday, 
 
     # Check for Facebook rate limit error
     if 'error_code' in reg and reg['error_code'] == 368:
-        print(f"[×] Rate limit detected. Pausing for 6 hours...")
-        time.sleep(6 * 60 * 60)  # Pause for 6 hours
+        print(f"[×] Rate limit detected. Pausing for 11 seconds...")
+        time.sleep(11)  # Pause for 11 seconds
         return False
     
     if 'new_user_id' in reg and 'session_info' in reg:
@@ -133,20 +113,23 @@ def register_facebook_account(email, password, first_name, last_name, birthday, 
 if __name__ == '__main__':
     num_accounts = int(input('[+] How Many Accounts You Want: '))
     successful_accounts = 0
-    proxies = get_proxies()  # Fetch proxies
+
+    fake = Faker()
 
     while successful_accounts < num_accounts:
-        email, password, first_name, last_name, birthday = create_temp_mail_gg_account()
-        if email and password and first_name and last_name and birthday:
-            proxy = get_random_proxy(proxies)
-            proxy_dict = {
-                'http': f'http://{proxy}',
-                'https': f'https://{proxy}'
-            } if proxy else None
-            print(f'[+] Using proxy: {proxy}')
-            
-            success = register_facebook_account(email, password, first_name, last_name, birthday, proxy=proxy_dict)
+        # Fetch temp mail from ZylaLabs Temp Email API
+        email = get_temp_mail()
+        if email:
+            # Generate random user details
+            password = fake.password()
+            first_name = fake.first_name()
+            last_name = fake.last_name()
+            birthday = fake.date_of_birth(minimum_age=18, maximum_age=45)
+
+            # Attempt to register a Facebook account
+            success = register_facebook_account(email, password, first_name, last_name, birthday)
             if success:
                 successful_accounts += 1
                 print(f'[+] Successfully created {successful_accounts}/{num_accounts} accounts.')
+            
             time.sleep(120)  # wait for 2 minutes between account creation attempts
